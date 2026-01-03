@@ -1,47 +1,40 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { SystemMessage } from "@langchain/core/messages";
+import { AIMessage } from "@langchain/core/messages";
+import { ConfigurationSchema } from "./config/schema";
+import { callModel } from "./nodes/callModel";
+import { toolNode } from "./nodes/tools";
+import { processFile } from "./nodes/processFile";
 
 /**
- * 这是一个最简单的 Agent 实现
- * 它接收用户输入，调用 LLM，并返回结果
+ * Agent Workflow 定义
  */
 
-// 1. 定义节点函数
-// 这个函数将作为图中的一个节点运行
-const callModel = async (state: typeof MessagesAnnotation.State) => {
-  // 初始化模型
-  // 使用 DeepSeek 大模型
-  // DeepSeek 兼容 OpenAI SDK，只需配置 baseURL 和 apiKey
-  const model = new ChatOpenAI({
-    model: "deepseek-chat", // 或者 "deepseek-reasoner"
-    temperature: 0.7,
-    configuration: {
-      baseURL: "https://api.deepseek.com",
-    },
-    apiKey: process.env.DEEPSEEK_API_KEY,
-  });
+// 路由函数：决定下一步是调用工具还是结束
+const routeModelOutput = (state: typeof MessagesAnnotation.State) => {
+  const messages = state.messages;
+  const lastMessage = messages[messages.length - 1] as AIMessage;
 
-  // 如果没有系统消息，可以在这里添加（可选）
-  const messages = [new SystemMessage("你是一个乐于助人的 AI 助手。"), ...state.messages];
+  if (lastMessage.tool_calls?.length) {
+    return "tools";
+  }
 
-  // 调用模型
-  const response = await model.invoke(messages);
-
-  // 返回更新的状态
-  // MessagesAnnotation 会自动处理消息的追加
-  return { messages: [response] };
+  return "__end__";
 };
 
-// 2. 创建状态图
-const workflow = new StateGraph(MessagesAnnotation)
+// 创建状态图
+const workflow = new StateGraph(MessagesAnnotation, ConfigurationSchema)
   // 添加节点
-  .addNode("agent", callModel)
-  // 设置入口点：图从哪里开始
-  .addEdge("__start__", "agent")
-  // 设置出口点：图在哪里结束
-  .addEdge("agent", "__end__");
+  .addNode("processFile", processFile)
+  .addNode("callModel", callModel)
+  .addNode("tools", toolNode)
+  // 设置入口点
+  .addEdge("__start__", "processFile")
+  // 连接 processFile 到 callModel
+  .addEdge("processFile", "callModel")
+  // 设置条件边
+  .addConditionalEdges("callModel", routeModelOutput)
+  // 设置工具返回后的边
+  .addEdge("tools", "callModel");
 
-// 3. 编译并导出图
-// 这个导出的 graph 将被 langgraph-cli 使用
+// 编译并导出图
 export const graph = workflow.compile();
