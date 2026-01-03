@@ -1,16 +1,17 @@
-import { MessagesAnnotation, StateGraph } from "@langchain/langgraph";
+import { StateGraph } from "@langchain/langgraph";
 import { AIMessage } from "@langchain/core/messages";
 import { ConfigurationSchema } from "./config/schema";
 import { callModel } from "./nodes/callModel";
 import { toolNode } from "./nodes/tools";
 import { processFile } from "./nodes/processFile";
+import { GraphAnnotation } from "./state";
 
 /**
  * Agent Workflow 定义
  */
 
 // 路由函数：决定下一步是调用工具还是结束
-const routeModelOutput = (state: typeof MessagesAnnotation.State) => {
+const routeModelOutput = (state: typeof GraphAnnotation.State) => {
   const messages = state.messages;
   const lastMessage = messages[messages.length - 1] as AIMessage;
 
@@ -22,7 +23,7 @@ const routeModelOutput = (state: typeof MessagesAnnotation.State) => {
 };
 
 // 创建状态图
-const workflow = new StateGraph(MessagesAnnotation, ConfigurationSchema)
+const workflow = new StateGraph(GraphAnnotation, ConfigurationSchema)
   // 添加节点
   .addNode("processFile", processFile)
   .addNode("callModel", callModel)
