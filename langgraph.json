@@ -2,7 +2,7 @@
   "dependencies": ["."],
   "graphs": {
     "agent": "./src/agent.ts:graph",
-    "graph": "./src/graph.ts:graph"
+    "search": "./src/agent.ts:graph"
   },
   "env": ".env"
 }
